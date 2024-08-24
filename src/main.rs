@@ -55,21 +55,23 @@ fn Home() -> Element {
     };
 
     rsx! {
-        div { class: "container mx-auto p-4",
-            h1 { class: "text-4xl font-bold mb-4", "Rustbin" }
-            textarea {
-                class: "w-full h-64 p-2 border rounded mb-4",
-                placeholder: "Enter your paste content here",
-                oninput: move |evt| content.set(evt.value().clone()),
+        div { class: "min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4",
+            div { class: "w-full max-w-md bg-white rounded-lg shadow-md p-6",
+                h1 { class: "text-3xl font-bold mb-6 text-center text-gray-800", "Rustbin" }
+                textarea {
+                    class: "w-full h-64 p-2 border rounded mb-4 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500",
+                    placeholder: "Enter your paste content here",
+                    oninput: move |evt| content.set(evt.value().clone()),
+                }
+                button {
+                    class: "w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-200",
+                    onclick: create_paste,
+                    "Create Paste"
+                }
+                {error.read().as_ref().map(|err| rsx!(
+                    p { class: "text-red-500 mt-2 text-center", "{err}" }
+                ))}
             }
-            button {
-                class: "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded",
-                onclick: create_paste,
-                "Create Paste"
-            }
-            {error.read().as_ref().map(|err| rsx!(
-                p { class: "text-red-500 mt-2", "{err}" }
-            ))}
         }
     }
 }
@@ -83,24 +85,26 @@ fn Paste(id: String) -> Element {
     });
 
     rsx! {
-        div { class: "container mx-auto p-4",
-            h1 { class: "text-4xl font-bold mb-4", "Paste {id_for_display}" }
-            {match paste.read().as_ref() {
-                Some(Ok(paste_data)) => rsx! {
-                    pre { class: "bg-gray-100 p-4 rounded",
-                        code { "{paste_data.content}" }
-                    }
-                    p { class: "mt-4 text-sm text-gray-600",
-                        "Created at: {paste_data.created_at}"
-                    }
-                },
-                Some(Err(e)) => rsx! { p { class: "text-red-500", "Error loading paste: {e}" } },
-                None => rsx! { p { "Loading..." } },
-            }}
-            Link {
-                class: "mt-4 text-blue-500 hover:text-blue-700",
-                to: Route::Home {},
-                "Back to Home"
+        div { class: "min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4",
+            div { class: "w-full max-w-2xl bg-white rounded-lg shadow-md p-6",
+                h1 { class: "text-3xl font-bold mb-6 text-center text-gray-800", "Paste {id_for_display}" }
+                {match paste.read().as_ref() {
+                    Some(Ok(paste_data)) => rsx! {
+                        pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
+                            code { class: "text-sm", "{paste_data.content}" }
+                        }
+                        p { class: "mt-4 text-sm text-gray-600",
+                            "Created at: {paste_data.created_at}"
+                        }
+                    },
+                    Some(Err(e)) => rsx! { p { class: "text-red-500", "Error loading paste: {e}" } },
+                    None => rsx! { p { class: "text-gray-600", "Loading..." } },
+                }}
+                Link {
+                    class: "mt-6 inline-block bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-200",
+                    to: Route::Home {},
+                    "Back to Home"
+                }
             }
         }
     }
