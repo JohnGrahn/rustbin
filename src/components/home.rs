@@ -8,13 +8,15 @@ pub fn Home() -> Element {
     let mut content = use_signal(|| String::new());
     let mut error = use_signal(|| None::<String>);
     let mut expiration = use_signal(|| ExpirationTime::OneHour);
+    let mut burn_after_read = use_signal(|| false);
 
     let create_paste = move |_| {
         let content_str = content.read().to_string();
         let expiration_value = *expiration.read();
+        let burn_after_read_value = *burn_after_read.read();
         error.set(None);
         spawn(async move {
-            match create_paste(content_str, expiration_value).await {
+            match create_paste(content_str, expiration_value, burn_after_read_value).await {
                 Ok(id) => {
                     let navigator = use_navigator();
                     navigator.push(Route::Paste { id });
@@ -58,6 +60,16 @@ pub fn Home() -> Element {
                     option { value: "OneWeek", "1 week" }
                     option { value: "TwoWeeks", "2 weeks" }
                     option { value: "OneMonth", "1 month" }
+                }
+                div { class: "flex items-center mb-4",
+                    input {
+                        r#type: "checkbox",
+                        id: "burn-after-read",
+                        class: "mr-2",
+                        checked: *burn_after_read.read(),
+                        oninput: move |evt| burn_after_read.set(evt.value().parse().unwrap_or(false)),
+                    }
+                    label { r#for: "burn-after-read", "Burn after reading" }
                 }
                 button {
                     class: "w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-200",

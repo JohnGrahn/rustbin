@@ -8,6 +8,7 @@ pub struct PasteData {
     pub content: String,
     pub created_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    pub burn_after_read: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]

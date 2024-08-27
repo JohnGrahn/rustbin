@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 
 
 #[server(CreatePaste)]
-pub async fn create_paste(content: String, expiration: ExpirationTime) -> Result<String, ServerFnError> {
+pub async fn create_paste(content: String, expiration: ExpirationTime, burn_after_read: bool) -> Result<String, ServerFnError> {
     use rand::Rng;
     use sqlx::PgPool;
 
@@ -20,11 +20,12 @@ pub async fn create_paste(content: String, expiration: ExpirationTime) -> Result
     let expires_at = now + expiration_duration;
 
     sqlx::query!(
-        "INSERT INTO pastes (id, content, created_at, expires_at) VALUES ($1, $2, $3, $4)",
+        "INSERT INTO pastes (id, content, created_at, expires_at, burn_after_read) VALUES ($1, $2, $3, $4, $5)",
         id,
         content,
         now,
-        expires_at
+        expires_at,
+        burn_after_read
     )
     .execute(&pool)
     .await?;
@@ -39,11 +40,22 @@ pub async fn get_paste(id: String) -> Result<PasteData, ServerFnError> {
     let pool = PgPool::connect(&std::env::var("DATABASE_URL")?).await?;
     let paste = sqlx::query_as!(
         PasteData,
-        "SELECT id, content, created_at, expires_at FROM pastes WHERE id = $1",
+        "SELECT id, content, created_at, expires_at, burn_after_read FROM pastes WHERE id = $1",
         id
     )
     .fetch_one(&pool)
     .await?;
+
+    if paste.burn_after_read {
+        let now = chrono::Utc::now();
+        let time_since_creation = now.signed_duration_since(paste.created_at);
+
+        if time_since_creation > chrono::Duration::seconds(30) {
+            sqlx::query!("DELETE FROM pastes WHERE id = $1", id)
+                .execute(&pool)
+                .await?;
+        }
+    }
 
     Ok(paste)
 }

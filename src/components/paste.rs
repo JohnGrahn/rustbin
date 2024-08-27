@@ -29,6 +29,15 @@ pub fn Paste(id: String) -> Element {
                             p { class: "mt-2 text-sm text-gray-600",
                                 "Expires in: {time_left.num_minutes()} minutes"
                             }
+                            {if paste_data.burn_after_read {
+                                Some(rsx!(
+                                    p { class: "mt-2 text-sm text-red-600 font-bold",
+                                        "Warning: This paste will be deleted after viewing (30 seconds grace period after creation)."
+                                    }
+                                ))
+                            } else {
+                                None
+                            }}
                         }
                     },
                     Some(Err(e)) => rsx! { p { class: "text-red-500", "Error loading paste: {e}" } },
