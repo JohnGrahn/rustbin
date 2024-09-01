@@ -7,6 +7,6 @@ use crate::components::paste::Paste;
 pub enum Route {
     #[route("/")]
     Home {},
-    #[route("/paste/:id")]
+    #[route("/:id")]
     Paste { id: String },
 }

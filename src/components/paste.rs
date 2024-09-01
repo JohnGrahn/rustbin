@@ -2,6 +2,27 @@ use dioxus::prelude::*;
 use crate::server::get_paste;
 use crate::routes::Route;
 use chrono::Utc;
+use pulldown_cmark::{Parser, html::push_html};
+use chrono::Duration;
+
+fn format_duration(duration: Duration) -> String {
+    let days = duration.num_days();
+    let hours = duration.num_hours() % 24;
+    let minutes = duration.num_minutes() % 60;
+
+    let mut parts = Vec::new();
+    if days > 0 {
+        parts.push(format!("{} day{}", days, if days > 1 { "s" } else { "" }));
+    }
+    if hours > 0 {
+        parts.push(format!("{} hour{}", hours, if hours > 1 { "s" } else { "" }));
+    }
+    if minutes > 0 || (days == 0 && hours == 0) {
+        parts.push(format!("{} minute{}", minutes, if minutes > 1 { "s" } else { "" }));
+    }
+
+    parts.join(", ")
+}
 
 #[component]
 pub fn Paste(id: String) -> Element {
@@ -20,14 +41,45 @@ pub fn Paste(id: String) -> Element {
                         let now = Utc::now();
                         let time_left = paste_data.expires_at.signed_duration_since(now);
                         rsx! {
-                            pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
-                                code { class: "text-sm", "{paste_data.content}" }
-                            }
+                            {match paste_data.display_format.as_str() {
+                                "PlainText" => rsx! {
+                                    pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
+                                        code { class: "text-sm", "{paste_data.content}" }
+                                    }
+                                },
+                                "SourceCode" => rsx! {
+                                    pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
+                                        code { class: "text-sm",
+                                            {paste_data.content.lines().enumerate().map(|(i, line)| {
+                                                rsx! {
+                                                    span { class: "mr-4 text-gray-500", "{i + 1}" }
+                                                    "{line}\n"
+                                                }
+                                            })}
+                                        }
+                                    }
+                                },
+                                "Markdown" => {
+                                    let mut html_output = String::new();
+                                    let parser = Parser::new(&paste_data.content);
+                                    push_html(&mut html_output, parser);
+                                    rsx! {
+                                        div { class: "bg-gray-100 p-4 rounded overflow-x-auto prose",
+                                            dangerous_inner_html: "{html_output}"
+                                        }
+                                    }
+                                },
+                                _ => rsx! {
+                                    pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
+                                        code { class: "text-sm", "{paste_data.content}" }
+                                    }
+                                }
+                            }}
                             p { class: "mt-4 text-sm text-gray-600",
                                 "Created at: {paste_data.created_at}"
                             }
                             p { class: "mt-2 text-sm text-gray-600",
-                                "Expires in: {time_left.num_minutes()} minutes"
+                                "Expires in: {format_duration(time_left)}"
                             }
                             {if paste_data.burn_after_read {
                                 Some(rsx!(
