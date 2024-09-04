@@ -5,7 +5,7 @@ mod routes;
 mod server;
 mod models;
 mod jobs;
-
+mod encryption;
 use dioxus::prelude::*;
 use dioxus_logger::tracing;
 use routes::Route;

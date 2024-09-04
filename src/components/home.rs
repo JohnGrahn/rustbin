@@ -2,6 +2,8 @@ use dioxus::prelude::*;
 use crate::server::create_paste;
 use crate::routes::Route;
 use crate::models::ExpirationTime;
+use crate::encryption::{generate_key, encrypt};
+use base64::{engine::general_purpose, Engine};
 
 #[component]
 pub fn Home() -> Element {
@@ -17,13 +19,21 @@ pub fn Home() -> Element {
         let burn_after_read_value = *burn_after_read.read();
         let display_format_value = display_format.read().to_string();
         error.set(None);
+
         spawn(async move {
-            match create_paste(content_str, expiration_value, burn_after_read_value, display_format_value).await {
-                Ok(id) => {
-                    let navigator = use_navigator();
-                    navigator.push(Route::Paste { id });
+            let key = generate_key();
+            match encrypt(&content_str, &key) {
+                Ok(encrypted_content) => {
+                    match create_paste(encrypted_content, expiration_value, burn_after_read_value, display_format_value).await {
+                        Ok(id) => {
+                            let navigator = use_navigator();
+                            let key_base64 = general_purpose::URL_SAFE_NO_PAD.encode(key);
+                            navigator.push(Route::Paste { id: format!("{}#{}", id, key_base64) });
+                        }
+                        Err(e) => error.set(Some(e.to_string())),
+                    }
                 }
-                Err(e) => error.set(Some(e.to_string())),
+                Err(e) => error.set(Some(format!("Encryption error: {}", e))),
             }
         });
     };

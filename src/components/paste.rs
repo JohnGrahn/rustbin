@@ -4,6 +4,8 @@ use crate::routes::Route;
 use chrono::Utc;
 use pulldown_cmark::{Parser, html::push_html};
 use chrono::Duration;
+use crate::encryption::decrypt;
+use base64::{engine::general_purpose, Engine as _};
 
 fn format_duration(duration: Duration) -> String {
     let days = duration.num_days();
@@ -26,16 +28,32 @@ fn format_duration(duration: Duration) -> String {
 
 #[component]
 pub fn Paste(id: String) -> Element {
-    let id_for_display = id.clone();
+    let id_parts = use_memo(move || {
+        let parts = id.split_once('#').unwrap_or((&id, ""));
+        (parts.0.to_string(), parts.1.to_string())
+    });
     let paste = use_resource(move || {
-        let id = id.clone();
+        let id = id_parts().0.clone();
         async move { get_paste(id).await }
+    });
+
+    let mut decrypted_content = use_signal(|| String::new());
+
+    use_effect(move || {
+        if let Some(Ok(paste_data)) = paste.read().as_ref() {
+            let (_, key_base64) = id_parts();
+            if let Ok(key) = general_purpose::URL_SAFE_NO_PAD.decode(key_base64) {
+                if let Ok(decrypted) = decrypt(&paste_data.content, key.as_slice().try_into().unwrap()) {
+                    decrypted_content.set(decrypted);
+                }
+            }
+        }
     });
 
     rsx! {
         div { class: "min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4",
             div { class: "w-full max-w-2xl bg-white rounded-lg shadow-md p-6",
-                h1 { class: "text-3xl font-bold mb-6 text-center text-gray-800", "Paste {id_for_display}" }
+                h1 { class: "text-3xl font-bold mb-6 text-center text-gray-800", "Paste {id_parts().0}" }
                 {match paste.read().as_ref() {
                     Some(Ok(paste_data)) => {
                         let now = Utc::now();
@@ -44,13 +62,13 @@ pub fn Paste(id: String) -> Element {
                             {match paste_data.display_format.as_str() {
                                 "PlainText" => rsx! {
                                     pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
-                                        code { class: "text-sm", "{paste_data.content}" }
+                                        code { class: "text-sm", "{decrypted_content}" }
                                     }
                                 },
                                 "SourceCode" => rsx! {
                                     pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
                                         code { class: "text-sm",
-                                            {paste_data.content.lines().enumerate().map(|(i, line)| {
+                                            {decrypted_content.read().lines().enumerate().map(|(i, line)| {
                                                 rsx! {
                                                     span { class: "mr-4 text-gray-500", "{i + 1}" }
                                                     "{line}\n"
@@ -60,8 +78,9 @@ pub fn Paste(id: String) -> Element {
                                     }
                                 },
                                 "Markdown" => {
+                                    let content = decrypted_content.read();
                                     let mut html_output = String::new();
-                                    let parser = Parser::new(&paste_data.content);
+                                    let parser = Parser::new(&content);
                                     push_html(&mut html_output, parser);
                                     rsx! {
                                         div { class: "bg-gray-100 p-4 rounded overflow-x-auto prose",
@@ -71,7 +90,7 @@ pub fn Paste(id: String) -> Element {
                                 },
                                 _ => rsx! {
                                     pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
-                                        code { class: "text-sm", "{paste_data.content}" }
+                                        code { class: "text-sm", "{decrypted_content}" }
                                     }
                                 }
                             }}

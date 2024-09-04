@@ -17,7 +17,8 @@ dioxus-logger = "0.5.1"
 dotenv = {version = "0.15.0", optional = true}
 rand = "0.8.5"
 pulldown-cmark = "0.9.2"
-
+aes-gcm = "0.10.1"
+base64 = "0.21.0"
 
 [features]
 default = []
