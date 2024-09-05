@@ -29,7 +29,7 @@ fn format_duration(duration: Duration) -> String {
 #[component]
 pub fn Paste(id: String) -> Element {
     let id_parts = use_memo(move || {
-        let parts = id.split_once('#').unwrap_or((&id, ""));
+        let parts = id.split_once('-').unwrap_or((&id, ""));
         (parts.0.to_string(), parts.1.to_string())
     });
     let paste = use_resource(move || {
@@ -38,14 +38,23 @@ pub fn Paste(id: String) -> Element {
     });
 
     let mut decrypted_content = use_signal(|| String::new());
+    let mut decryption_error = use_signal(|| false);
 
     use_effect(move || {
         if let Some(Ok(paste_data)) = paste.read().as_ref() {
             let (_, key_base64) = id_parts();
-            if let Ok(key) = general_purpose::URL_SAFE_NO_PAD.decode(key_base64) {
-                if let Ok(decrypted) = decrypt(&paste_data.content, key.as_slice().try_into().unwrap()) {
-                    decrypted_content.set(decrypted);
-                }
+            match general_purpose::URL_SAFE_NO_PAD.decode(key_base64) {
+                Ok(key) => {
+                    if key.len() == 32 {
+                        match decrypt(&paste_data.content, key.as_slice().try_into().unwrap()) {
+                            Ok(decrypted) => decrypted_content.set(decrypted),
+                            Err(_) => decryption_error.set(true),
+                        }
+                    } else {
+                        decryption_error.set(true);
+                    }
+                },
+                Err(_) => decryption_error.set(true),
             }
         }
     });
@@ -56,59 +65,67 @@ pub fn Paste(id: String) -> Element {
                 h1 { class: "text-3xl font-bold mb-6 text-center text-gray-800", "Paste {id_parts().0}" }
                 {match paste.read().as_ref() {
                     Some(Ok(paste_data)) => {
-                        let now = Utc::now();
-                        let time_left = paste_data.expires_at.signed_duration_since(now);
-                        rsx! {
-                            {match paste_data.display_format.as_str() {
-                                "PlainText" => rsx! {
-                                    pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
-                                        code { class: "text-sm", "{decrypted_content}" }
-                                    }
-                                },
-                                "SourceCode" => rsx! {
-                                    pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
-                                        code { class: "text-sm",
-                                            {decrypted_content.read().lines().enumerate().map(|(i, line)| {
-                                                rsx! {
-                                                    span { class: "mr-4 text-gray-500", "{i + 1}" }
-                                                    "{line}\n"
-                                                }
-                                            })}
-                                        }
-                                    }
-                                },
-                                "Markdown" => {
-                                    let content = decrypted_content.read();
-                                    let mut html_output = String::new();
-                                    let parser = Parser::new(&content);
-                                    push_html(&mut html_output, parser);
-                                    rsx! {
-                                        div { class: "bg-gray-100 p-4 rounded overflow-x-auto prose",
-                                            dangerous_inner_html: "{html_output}"
-                                        }
-                                    }
-                                },
-                                _ => rsx! {
-                                    pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
-                                        code { class: "text-sm", "{decrypted_content}" }
-                                    }
+                        if *decryption_error.read() {
+                            rsx! {
+                                p { class: "text-red-500 text-center",
+                                    "Unable to decrypt the content. Please make sure you have the correct URL with the full key."
                                 }
-                            }}
-                            p { class: "mt-4 text-sm text-gray-600",
-                                "Created at: {paste_data.created_at}"
                             }
-                            p { class: "mt-2 text-sm text-gray-600",
-                                "Expires in: {format_duration(time_left)}"
-                            }
-                            {if paste_data.burn_after_read {
-                                Some(rsx!(
-                                    p { class: "mt-2 text-sm text-red-600 font-bold",
-                                        "Warning: This paste will be deleted after viewing (30 seconds grace period after creation)."
+                        } else {
+                            let now = Utc::now();
+                            let time_left = paste_data.expires_at.signed_duration_since(now);
+                            rsx! {
+                                {match paste_data.display_format.as_str() {
+                                    "PlainText" => rsx! {
+                                        pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
+                                            code { class: "text-sm", "{decrypted_content}" }
+                                        }
+                                    },
+                                    "SourceCode" => rsx! {
+                                        pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
+                                            code { class: "text-sm",
+                                                {decrypted_content.read().lines().enumerate().map(|(i, line)| {
+                                                    rsx! {
+                                                        span { class: "mr-4 text-gray-500", "{i + 1}" }
+                                                        "{line}\n"
+                                                    }
+                                                })}
+                                            }
+                                        }
+                                    },
+                                    "Markdown" => {
+                                        let content = decrypted_content.read();
+                                        let mut html_output = String::new();
+                                        let parser = Parser::new(&content);
+                                        push_html(&mut html_output, parser);
+                                        rsx! {
+                                            div { class: "bg-gray-100 p-4 rounded overflow-x-auto prose",
+                                                dangerous_inner_html: "{html_output}"
+                                            }
+                                        }
+                                    },
+                                    _ => rsx! {
+                                        pre { class: "bg-gray-100 p-4 rounded overflow-x-auto",
+                                            code { class: "text-sm", "{decrypted_content}" }
+                                        }
                                     }
-                                ))
-                            } else {
-                                None
-                            }}
+                                }}
+                                p { class: "mt-4 text-sm text-gray-600",
+                                    "Created at: {paste_data.created_at}"
+                                }
+                                p { class: "mt-2 text-sm text-gray-600",
+                                    "Expires in: {format_duration(time_left)}"
+                                }
+                                {if paste_data.burn_after_read {
+                                    Some(rsx!(
+                                        p { class: "mt-2 text-sm text-red-600 font-bold",
+                                            "Warning: This paste will be deleted after viewing (30 seconds grace period after creation)."
+                                        }
+                                    ))
+                                } else {
+                                    None
+                                }}
+                            }
                         }
                     },
                     Some(Err(e)) => rsx! { p { class: "text-red-500", "Error loading paste: {e}" } },

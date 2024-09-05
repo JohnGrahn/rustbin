@@ -28,7 +28,7 @@ pub fn Home() -> Element {
                         Ok(id) => {
                             let navigator = use_navigator();
                             let key_base64 = general_purpose::URL_SAFE_NO_PAD.encode(key);
-                            navigator.push(Route::Paste { id: format!("{}#{}", id, key_base64) });
+                            navigator.push(Route::Paste { id: format!("{}-{}", id, key_base64) });
                         }
                         Err(e) => error.set(Some(e.to_string())),
                     }
