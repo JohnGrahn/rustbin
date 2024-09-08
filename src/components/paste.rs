@@ -27,14 +27,11 @@ fn format_duration(duration: Duration) -> String {
 }
 
 #[component]
-pub fn Paste(id: String) -> Element {
-    let id_parts = use_memo(move || {
-        let parts = id.split_once('-').unwrap_or((&id, ""));
-        (parts.0.to_string(), parts.1.to_string())
-    });
+pub fn Paste(id: String, encryption_key: String) -> Element {
+    let id_clone = id.clone();
     let paste = use_resource(move || {
-        let id = id_parts().0.clone();
-        async move { get_paste(id).await }
+        let id_for_closure = id_clone.clone();
+        async move { get_paste(id_for_closure).await }
     });
 
     let mut decrypted_content = use_signal(|| String::new());
@@ -42,11 +39,10 @@ pub fn Paste(id: String) -> Element {
 
     use_effect(move || {
         if let Some(Ok(paste_data)) = paste.read().as_ref() {
-            let (_, key_base64) = id_parts();
-            match general_purpose::URL_SAFE_NO_PAD.decode(key_base64) {
-                Ok(key) => {
-                    if key.len() == 32 {
-                        match decrypt(&paste_data.content, key.as_slice().try_into().unwrap()) {
+            match general_purpose::URL_SAFE_NO_PAD.decode(&encryption_key) {
+                Ok(key_bytes) => {
+                    if key_bytes.len() == 32 {
+                        match decrypt(&paste_data.content, key_bytes.as_slice().try_into().unwrap()) {
                             Ok(decrypted) => decrypted_content.set(decrypted),
                             Err(_) => decryption_error.set(true),
                         }
@@ -62,7 +58,7 @@ pub fn Paste(id: String) -> Element {
     rsx! {
         div { class: "min-h-screen bg-gray-100 flex flex-col items-center justify-center p-4",
             div { class: "w-full max-w-2xl bg-white rounded-lg shadow-md p-6",
-                h1 { class: "text-3xl font-bold mb-6 text-center text-gray-800", "Paste {id_parts().0}" }
+                h1 { class: "text-3xl font-bold mb-6 text-center text-gray-800", "Paste {id}" }
                 {match paste.read().as_ref() {
                     Some(Ok(paste_data)) => {
                         if *decryption_error.read() {

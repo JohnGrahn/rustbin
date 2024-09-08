@@ -27,8 +27,8 @@ pub fn Home() -> Element {
                     match create_paste(encrypted_content, expiration_value, burn_after_read_value, display_format_value).await {
                         Ok(id) => {
                             let navigator = use_navigator();
-                            let key_base64 = general_purpose::URL_SAFE_NO_PAD.encode(key);
-                            navigator.push(Route::Paste { id: format!("{}-{}", id, key_base64) });
+                            let encryption_key = general_purpose::URL_SAFE_NO_PAD.encode(key);
+                            navigator.push(Route::Paste { id, encryption_key });
                         }
                         Err(e) => error.set(Some(e.to_string())),
                     }
